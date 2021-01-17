@@ -35,7 +35,7 @@ func IsActionEnv(getenv GetenvFn) bool {
 }
 
 // NewActionEnv creates a new ActionEnv
-func NewActionEnv(getenv GetenvFn, version string) (*ActionEnv, error) {
+func NewActionEnv(getenv GetenvFn, client *Client) (*ActionEnv, error) {
 	getenvOrErr := func(name string) (string, error) {
 		v := getenv(name)
 		if v == "" {
@@ -66,10 +66,8 @@ func NewActionEnv(getenv GetenvFn, version string) (*ActionEnv, error) {
 	}
 	repositoryParts := strings.SplitN(repository, "/", 2)
 
-	client := &Client{
-		Token:   token,
-		Version: version,
-	}
+	// TODO: move?
+	client.Token = token
 
 	return &ActionEnv{
 		getenv:     getenv,

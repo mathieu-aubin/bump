@@ -74,8 +74,8 @@ func main() {
 
 	if github.IsActionEnv(o.Getenv) {
 		r = githubaction.Command{
-			Version: version,
-			OS:      o,
+			GHClient: &github.Client{Version: version},
+			OS:       o,
 		}
 	} else {
 		r = cli.Command{

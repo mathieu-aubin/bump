@@ -42,7 +42,7 @@ func TestNewActionEnv(t *testing.T) {
 		"GITHUB_BASE_REF":   "base ref",
 		"GITHUB_REPOSITORY": "user/repo",
 		"INPUT_A":           "a",
-	}), "test")
+	}), &github.Client{Version: "test"})
 
 	if err != nil {
 		t.Fatal(err)

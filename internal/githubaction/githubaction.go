@@ -76,8 +76,8 @@ func CheckTemplateReplaceFn(c *bump.Check) func(s string) (string, error) {
 
 // Command is a github action interface to bump packages
 type Command struct {
-	Version string
-	OS      bump.OS
+	GHClient *github.Client
+	OS       bump.OS
 }
 
 // Run bump in a github action environment
@@ -101,7 +101,7 @@ func (cmd Command) runExecs(argss [][]string) error {
 }
 
 func (cmd Command) run() []error {
-	ae, err := github.NewActionEnv(cmd.OS.Getenv, cmd.Version)
+	ae, err := github.NewActionEnv(cmd.OS.Getenv, cmd.GHClient)
 	if err != nil {
 		return []error{err}
 	}
