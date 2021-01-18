@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// TODO: Assign("asd", &asd, ) instead of T?
+
 type lexer struct {
 	s string
 	p int
@@ -14,7 +16,7 @@ type lexer struct {
 
 type ScanFn func(s string) (string, error)
 
-type Token struct {
+type T struct {
 	Name string
 	Dest *string
 	Fn   ScanFn
@@ -35,33 +37,26 @@ func (l *lexer) scan(fn ScanFn) (string, int, error) {
 	return t, slen, err
 }
 
-func Tokenize(s string, ts []Token) (int, error) {
+func Scan(s string, fn ScanFn) (int, error) {
 	l := &lexer{s: s}
-	for _, t := range ts {
-		s, p, err := l.scan(t.Fn)
-		if err != nil {
-			if t.Name != "" {
-				return p, fmt.Errorf("%s: %w", t.Name, err)
-			}
+	for {
+		t, p, err := l.scan(fn)
+		if err != nil || t == "" {
 			return p, err
 		}
-		if t.Dest != nil {
-			*t.Dest = s
-		}
 	}
-	return 0, nil
 }
 
 func Re(re *regexp.Regexp) func(s string) (string, error) {
 	start := true
 	sb := strings.Builder{}
-	return func(s string) (string, error) {
-		if start && !re.MatchString(s) {
+	return func(c string) (string, error) {
+		if start && !re.MatchString(c) {
 			return "", fmt.Errorf("expected %s", re)
 		}
 		start = false
-		if re.MatchString(s) {
-			sb.WriteString(s)
+		if re.MatchString(c) {
+			sb.WriteString(c)
 			return "", nil
 		}
 		return sb.String(), nil
@@ -70,14 +65,14 @@ func Re(re *regexp.Regexp) func(s string) (string, error) {
 
 func Rest(min int) func(s string) (string, error) {
 	sb := strings.Builder{}
-	return func(s string) (string, error) {
-		if s == "" {
+	return func(c string) (string, error) {
+		if c == "" {
 			if sb.Len() < min {
 				return "", fmt.Errorf("expected more characters")
 			}
 			return sb.String(), nil
 		}
-		sb.WriteString(s)
+		sb.WriteString(c)
 		return "", nil
 	}
 }
@@ -92,32 +87,32 @@ func Quoted(q string) func(s string) (string, error) {
 	state := Start
 	sb := strings.Builder{}
 
-	return func(s string) (string, error) {
-		if s == "" && state != End {
+	return func(c string) (string, error) {
+		if c == "" && state != End {
 			return "", fmt.Errorf("found no ending %s", q)
 		}
 
 		switch state {
 		case Start:
-			if s != q {
+			if c != q {
 				return "", fmt.Errorf("expected %s", q)
 			}
 			state = InRe
 			return "", nil
 		case InRe:
-			if s == `\` {
+			if c == `\` {
 				state = Escape
-			} else if s == q {
+			} else if c == q {
 				state = End
 			} else {
-				sb.WriteString(s)
+				sb.WriteString(c)
 			}
 			return "", nil
 		case Escape:
-			if s != q {
+			if c != q {
 				sb.WriteString(`\`)
 			}
-			sb.WriteString(s)
+			sb.WriteString(c)
 			state = InRe
 			return "", nil
 		case End:
@@ -125,5 +120,50 @@ func Quoted(q string) func(s string) (string, error) {
 		}
 
 		return "", errors.New("should not be reached")
+	}
+}
+
+func Or(fns ...ScanFn) func(s string) (string, error) {
+	return func(c string) (string, error) {
+		for i, fn := range fns {
+			if s, err := fn(c); err != nil {
+				fns = append(fns[0:i], fns[i+1:]...)
+				if len(fns) == 0 {
+					return "", errors.New("no match")
+				}
+			} else if s != "" {
+				return s, nil
+			}
+		}
+		return "", nil
+	}
+}
+
+func Concat(ts ...T) func(s string) (string, error) {
+	i := 0
+
+	return func(c string) (string, error) {
+		if i == len(ts) {
+			if c == "" {
+				return "", nil
+			}
+			return "", fmt.Errorf("unexpected %s", c)
+		}
+		t := ts[i]
+
+		s, err := t.Fn(c)
+		if err != nil {
+			if t.Name != "" {
+				return "", fmt.Errorf("%s: %w", t.Name, err)
+			}
+			return "", err
+		} else if s != "" {
+			if t.Dest != nil {
+				*t.Dest = s
+			}
+			i++
+			return s, nil
+		}
+		return "", nil
 	}
 }
