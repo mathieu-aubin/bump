@@ -108,11 +108,16 @@ type execArgs struct {
 	env  []string
 }
 
+type writeArgs struct {
+	name string
+	data string
+}
+
 type testOS struct {
-	//actualWrittenFiles []testCaseFile
-	actualStdoutBuf *bytes.Buffer
-	actualStderrBuf *bytes.Buffer
-	actualExec      []execArgs
+	actualWrittenFiles []writeArgs
+	actualStdoutBuf    *bytes.Buffer
+	actualStderrBuf    *bytes.Buffer
+	actualExec         []execArgs
 }
 
 func (t *testOS) Args() []string { panic("not implemented") }
@@ -143,9 +148,13 @@ func (t *testOS) Getenv(name string) string {
 
 	return envs[name]
 }
-func (t *testOS) Stdout() io.Writer                        { return t.actualStdoutBuf }
-func (t *testOS) Stderr() io.Writer                        { return t.actualStderrBuf }
-func (t *testOS) WriteFile(name string, data []byte) error { panic("not implemented") }
+func (t *testOS) Stdout() io.Writer { return t.actualStdoutBuf }
+func (t *testOS) Stderr() io.Writer { return t.actualStderrBuf }
+func (t *testOS) WriteFile(name string, data []byte) error {
+	t.actualWrittenFiles = append(t.actualWrittenFiles, writeArgs{name: name, data: string(data)})
+	return nil
+}
+
 func (t *testOS) ReadFile(name string) ([]byte, error) {
 	//panic("not implemented")
 
@@ -157,6 +166,8 @@ func (t *testOS) ReadFile(name string) ([]byte, error) {
 	case "test":
 		return []byte(`
 		bump: a /a=(.*)/ static:2
+		bump: a message blabla $LATEST
+		bump: a link "asd" http://asdsad
 		a=1
 	`), nil
 	}
@@ -190,10 +201,19 @@ func TestRun(t *testing.T) {
 			HTTPClient: responseClient(func(req *http.Request) (interface{}, int) {
 
 				log.Printf("req: %#+v\n", req)
-
 				log.Printf("req.URL.String(): %#+v\n", req.URL.String())
 
-				return nil, 200
+				switch {
+				case req.Method == http.MethodGet && req.URL.Path == "/repos/owner/repo/pulls":
+					pulls := []github.PullRequest{
+						//{Number: 1},
+					}
+					return pulls, http.StatusOK
+				case req.Method == http.MethodPost && req.URL.Path == "/repos/owner/repo/pulls":
+					return github.PullRequest{}, http.StatusOK
+				}
+
+				return nil, http.StatusNotFound
 			}),
 		},
 		OS: to,
